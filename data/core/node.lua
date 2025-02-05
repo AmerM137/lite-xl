@@ -535,6 +535,8 @@ function Node:draw_tab_title(view, font, is_active, is_hovered, x, y, w, h)
   local color = style.dim
   if is_active then color = style.text end
   if is_hovered then color = style.text end
+  -- changed(amer)
+  if view.doc and view.doc:is_dirty() then color = style.accent end
   common.draw_text(font, color, text, align, x, y, w, h)
 end
 
