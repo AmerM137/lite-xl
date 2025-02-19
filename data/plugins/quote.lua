@@ -1,8 +1,7 @@
 -- mod-version:3
-local core = require "core"
-local command = require "core.command"
-local keymap = require "core.keymap"
-
+local core = require("core")
+local command = require("core.command")
+local keymap = require("core.keymap")
 
 local escapes = {
   ["\\"] = "\\\\",
@@ -17,7 +16,6 @@ local function replace(chr)
   return escapes[chr] or string.format("\\x%02x", chr:byte())
 end
 
-
 command.add("core.docview", {
   ["quote:quote"] = function(dv)
     dv.doc:replace(function(text)
@@ -26,6 +24,6 @@ command.add("core.docview", {
   end,
 })
 
-keymap.add {
-  ["ctrl+'"] = "quote:quote",
-}
+-- keymap.add({
+--   ["ctrl+'"] = "quote:quote",
+-- })
