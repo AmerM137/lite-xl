@@ -93,13 +93,6 @@ local function cut_or_copy(delete)
   system.set_clipboard(full_text)
 end
 
-local function set_primary_selection(doc)
-  -- Doesn't work on Windows, so avoid spending time getting the text
-  if PLATFORM ~= "Windows" then
-    system.set_primary_selection(doc:get_selection_text())
-  end
-end
-
 local function split_cursor(dv, direction)
   local new_cursors = {}
   local dv_translate = direction < 0
@@ -304,15 +297,6 @@ local commands = {
     end
   end,
 
-  ["doc:paste-primary-selection"] = function(dv, x, y)
-    if type(x) == "number" and type(y) == "number" then
-      set_cursor(dv, x, y, "set")
-      -- Workaround to avoid that a middle mouse drag starts selecting
-      dv.mouse_selecting = nil
-    end
-    dv.doc:text_input(system.get_primary_selection() or "")
-  end,
-
   ["doc:newline"] = function(dv)
     for idx, line, col in dv.doc:get_selections(false, true) do
       local indent = dv.doc.lines[line]:match("^[\t ]*")
@@ -369,7 +353,6 @@ local commands = {
 
   ["doc:select-all"] = function(dv)
     dv.doc:set_selection(1, 1, math.huge, math.huge)
-    set_primary_selection(dv.doc)
     -- avoid triggering DocView:scroll_to_make_visible
     dv.last_line1 = 1
     dv.last_col1 = 1
@@ -380,9 +363,8 @@ local commands = {
   ["doc:select-lines"] = function(dv)
     for idx, line1, _, line2 in dv.doc:get_selections(true) do
       append_line_if_last_line(line2)
-      dv.doc:set_selections(idx, line2 + 1, 1, line1, 1)
+      dv.doc:set_selections(idx, line1, 1, line2 + 1, 1)
     end
-    set_primary_selection(dv.doc)
   end,
 
   ["doc:select-word"] = function(dv)
@@ -391,7 +373,6 @@ local commands = {
       local line2, col2 = translate.end_of_word(dv.doc, line1, col1)
       dv.doc:set_selections(idx, line2, col2, line1, col1)
     end
-    set_primary_selection(dv.doc)
   end,
 
   ["doc:join-lines"] = function(dv)
@@ -567,11 +548,6 @@ local commands = {
     dv.doc.crlf = not dv.doc.crlf
   end,
 
-  ["doc:toggle-overwrite"] = function(dv)
-    dv.doc.overwrite = not dv.doc.overwrite
-    core.blink_reset() -- to show the cursor has changed edit modes
-  end,
-
   ["doc:save-as"] = function(dv)
     local last_doc = core.last_active_view and core.last_active_view.doc
     local text
@@ -645,7 +621,6 @@ local commands = {
     local line2, col2 = dv:resolve_screen_position(x, y)
     dv.mouse_selecting = { line1, col1, nil }
     dv.doc:set_selection(line2, col2, line1, col1)
-    set_primary_selection(dv.doc)
   end,
 
   ["doc:create-cursor-previous-line"] = function(dv)
@@ -695,6 +670,51 @@ end, {
   end
 })
 
+-- commands['doc:delete-word-left'] = function(dv)
+--   for idx, line, col, line2, col2 in dv.doc:get_selections(true, false) do
+--     if line ~= line2 or col ~= col2 then
+--       dv.doc:remove(line, col, line2, col2)
+--     end
+  
+--     local l, c = dv.doc:position_offset(line, col, -1)
+--     local char = dv.doc:get_char(l, c)
+--     if l == line then
+--       -- delete word if already on end
+--       if not config.non_word_chars:find(char, nil, true) then
+--         local l2, c2 = translate.start_of_word(dv.doc, l, c)
+--         dv.doc:remove(line, col, l2, c2)
+--         line1, col1 = dv.doc:sort_positions(line, col, l2, c2)
+--       end
+--       dv.doc:set_selections(idx, line, col)
+--     end
+--   end
+--   dv.doc:merge_cursors(idx)
+    
+  --     -- also delete word if one space away
+  --     l, c = dv.doc:position_offset(l, c, -1)
+  --     char = dv.doc:get_char(l, c)
+  --     if not config.non_word_chars:find(char, nil, true) then
+  --       local l2, c2 = translate.start_of_word(dv.doc, l, c)
+  --       return dv.doc:remove(line, col, l2, c2)
+  --     end
+  --   end
+  --   -- delete all spaces and put cursor at end of word
+  --   local l1, c1 = line, col
+  --   local prev
+  --   while line > 1 or col > 1 do
+  --     if prev and prev ~= char or not config.non_word_chars:find(char, nil, true) then
+  --       break
+  --     end
+  --     prev, line, col = char, l, c
+  --     l, c = dv.doc:position_offset(line, col, -1)
+  --     char = dv.doc:get_char(l, c)
+  --   end
+  --   local l2, c2 = translate.end_of_word(dv.doc, line, col)
+  --   return dv.doc:remove(l1, c1, l2, c2)
+  -- end
+-- end
+
+
 local translations = {
   ["previous-char"] = translate,
   ["next-char"] = translate,
@@ -716,17 +736,14 @@ local translations = {
 }
 
 for name, obj in pairs(translations) do
-  commands["doc:move-to-" .. name] = function(dv)
-    dv.doc:move_to(obj[name:gsub("-", "_")], dv)
-  end
-  commands["doc:select-to-" .. name] = function(dv)
-    dv.doc:select_to(obj[name:gsub("-", "_")], dv)
-    set_primary_selection(dv.doc)
-  end
-  commands["doc:delete-to-" .. name] = function(dv)
-    dv.doc:delete_to(obj[name:gsub("-", "_")], dv)
-  end
+  commands["doc:move-to-" .. name] = function(dv) dv.doc:move_to(obj[name:gsub("-", "_")], dv) end
+  commands["doc:select-to-" .. name] = function(dv) dv.doc:select_to(obj[name:gsub("-", "_")], dv) end
+  commands["doc:delete-to-" .. name] = function(dv) dv.doc:delete_to(obj[name:gsub("-", "_")], dv) end
 end
+
+-- note(amer 2025-03-09): better behavior when deleting words
+commands["doc:delete-word-left"] = function(dv) dv.doc:delete_to(translate.word_left, dv) end
+commands["doc:delete-word-right"] = function(dv) dv.doc:delete_to(translate.word_right, dv) end
 
 commands["doc:move-to-previous-char"] = function(dv)
   for idx, line1, col1, line2, col2 in dv.doc:get_selections(true) do

@@ -57,6 +57,68 @@ function translate.next_word_end(doc, line, col)
 end
 
 
+--------------------------------------------
+-- note(amer 2025-03-09) improving ctrl+backspace
+function translate.word_left(doc, line, col)
+  local l, c = doc:position_offset(line, col, -1)
+  local char = doc:get_char(l, c)
+  if l == line then
+    -- delete word if already on end
+    if not is_non_word(char) then
+      return translate.start_of_word(doc, l, c)
+    end
+    -- also delete word if one space away
+    l, c = doc:position_offset(l, c, -1)
+    char = doc:get_char(l, c)
+    if not is_non_word(char) then
+      return translate.start_of_word(doc, l, c)
+    end
+  end
+  -- delete all spaces and put cursor at end of word
+  local prev
+  while line > 1 or col > 1 do
+    if prev and prev ~= char or not is_non_word(char) then
+      break
+    end
+    prev = char
+    line, col = doc:position_offset(line, col, -1)
+    char = doc:get_char(line, col)
+  end
+  return translate.end_of_word(doc, line, col)
+end
+
+function translate.word_right(doc, line, col)
+  local char = doc:get_char(line, col)
+  local l, c = doc:position_offset(line, col, 1)
+  if l == line then
+    -- delete word if already on end
+    if not is_non_word(char) then
+      return translate.end_of_word(doc, line, col)
+    end
+    -- also delete word if one space away
+    local l, c = doc:position_offset(line, col, 1)
+    char = doc:get_char(l, c)
+    if not is_non_word(char) then
+      return translate.end_of_word(doc, l, c)
+    end
+  end
+  -- delete all spaces and put cursor at start of word
+  local prev
+  local end_line, end_col = translate.end_of_doc(doc, line, col)
+  while line < end_line or col < end_col do
+    if prev and prev ~= char or not is_non_word(char) then
+      break
+    end
+    prev = char
+    line, col = doc:position_offset(line, col, 1)
+    char = doc:get_char(line, col)
+  end
+  return translate.start_of_word(doc, line, col)
+end
+
+--------------------------------------------
+
+
 function translate.start_of_word(doc, line, col)
   while true do
     local line2, col2 = doc:position_offset(line, col, -1)
