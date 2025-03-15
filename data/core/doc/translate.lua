@@ -12,6 +12,16 @@ local function is_non_word(char)
 end
 
 
+local function is_word(char)
+  return not config.non_word_chars:find(char, nil, true)
+end
+
+
+local function is_space(char)
+  return config.space_chars:find(char, nil, true)
+end
+
+
 function translate.previous_char(doc, line, col)
   repeat
     line, col = doc:position_offset(line, col, -1)
@@ -59,72 +69,79 @@ end
 
 --------------------------------------------
 -- note(amer 2025-03-09) improving ctrl+backspace
-function translate.word_left(doc, line, col)
-  local l, c = doc:position_offset(line, col, -1)
-  local char = doc:get_char(l, c)
-  if l == line then
-    -- delete word if already on end
-    if not is_non_word(char) then
-      return translate.start_of_word(doc, l, c)
-    end
-    -- also delete word if one space away
-    l, c = doc:position_offset(l, c, -1)
-    char = doc:get_char(l, c)
-    if not is_non_word(char) then
-      return translate.start_of_word(doc, l, c)
-    end
-  end
-  -- delete all spaces and put cursor at end of word
-  local prev
-  while line > 1 or col > 1 do
-    if prev and prev ~= char or not is_non_word(char) then
+function translate.skip_chars_left(doc, line, col, skip_fn)
+  while true do
+    local lnext, cnext = doc:position_offset(line, col, -1)
+    local char = doc:get_char(lnext, cnext)
+    -- if not on char or at start of doc
+    if not skip_fn(char) or (line == lnext and col == cnext) then
       break
     end
-    prev = char
-    line, col = doc:position_offset(line, col, -1)
-    char = doc:get_char(line, col)
+    line, col = lnext, cnext
   end
-  return translate.end_of_word(doc, line, col)
+  return line, col
 end
+
+
+function translate.skip_chars_right(doc, line, col, skip_fn)
+  while true do
+    local lnext, cnext = doc:position_offset(line, col, 1)
+    local char = doc:get_char(line, col) -- start at currrent position
+    -- if not on char or at end of doc
+    if not skip_fn(char) or (line == lnext and col == cnext) then
+      break
+    end
+    line, col = lnext, cnext
+  end
+  return line, col
+end
+
+
+function translate.word_left(doc, line, col)
+  local lnext, cnext = doc:position_offset(line, col, -1)
+  local char = doc:get_char(lnext, cnext)
+  
+  if col > 1 then -- linewise only
+    if not is_space(char) then
+      return translate.skip_chars_left(doc, lnext, cnext, is_word(char) and is_word or is_non_word)
+    end
+    -- try again skipping one space
+    lnext, cnext = doc:position_offset(lnext, cnext, -1)
+    char = doc:get_char(lnext, cnext)
+    if not is_space(char) then
+      return translate.skip_chars_left(doc, lnext, cnext, is_word(char) and is_word or is_non_word)
+    end
+  end
+
+  return translate.skip_chars_left(doc, lnext, cnext, is_space)
+end
+
 
 function translate.word_right(doc, line, col)
   local char = doc:get_char(line, col)
-  local l, c = doc:position_offset(line, col, 1)
-  if l == line then
-    -- delete word if already on end
-    if not is_non_word(char) then
-      return translate.end_of_word(doc, line, col)
+  local lnext, cnext = doc:position_offset(line, col, 1)
+
+  if cnext > 1 then -- linewise only
+    if not is_space(char) then
+      return translate.skip_chars_right(doc, line, col, is_word(char) and is_word or is_non_word)
     end
-    -- also delete word if one space away
-    local l, c = doc:position_offset(line, col, 1)
-    char = doc:get_char(l, c)
-    if not is_non_word(char) then
-      return translate.end_of_word(doc, l, c)
+    -- try again skipping one space
+    char = doc:get_char(lnext, cnext)
+    if not is_space(char) then
+      return translate.skip_chars_right(doc, lnext, cnext, is_word(char) and is_word or is_non_word)
     end
   end
-  -- delete all spaces and put cursor at start of word
-  local prev
-  local end_line, end_col = translate.end_of_doc(doc, line, col)
-  while line < end_line or col < end_col do
-    if prev and prev ~= char or not is_non_word(char) then
-      break
-    end
-    prev = char
-    line, col = doc:position_offset(line, col, 1)
-    char = doc:get_char(line, col)
-  end
-  return translate.start_of_word(doc, line, col)
+
+  return translate.skip_chars_right(doc, lnext, cnext, is_space)
 end
 
 --------------------------------------------
-
 
 function translate.start_of_word(doc, line, col)
   while true do
     local line2, col2 = doc:position_offset(line, col, -1)
     local char = doc:get_char(line2, col2)
-    if is_non_word(char)
-    or line == line2 and col == col2 then
+    if is_non_word(char) or line == line2 and col == col2 then
       break
     end
     line, col = line2, col2
@@ -137,8 +154,7 @@ function translate.end_of_word(doc, line, col)
   while true do
     local line2, col2 = doc:position_offset(line, col, 1)
     local char = doc:get_char(line, col)
-    if is_non_word(char)
-    or line == line2 and col == col2 then
+    if is_non_word(char) or line == line2 and col == col2 then
       break
     end
     line, col = line2, col2
