@@ -1,3 +1,0 @@
-meson setup --buildtype=release build
-meson compile -C build
-meson install -C Build --skip-subprojects --destdir ../lite-xl
