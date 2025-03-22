@@ -17,6 +17,11 @@ local function is_word(char)
 end
 
 
+local function is_symbol(char)
+  return config.symbol_chars:find(char, nil, true)
+end
+
+
 local function is_space(char)
   return config.space_chars:find(char, nil, true)
 end
@@ -103,13 +108,13 @@ function translate.word_left(doc, line, col)
   
   if col > 1 then -- linewise only
     if not is_space(char) then
-      return translate.skip_chars_left(doc, lnext, cnext, is_word(char) and is_word or is_non_word)
+      return translate.skip_chars_left(doc, lnext, cnext, is_word(char) and is_word or is_symbol)
     end
     -- try again skipping one space
     lnext, cnext = doc:position_offset(lnext, cnext, -1)
     char = doc:get_char(lnext, cnext)
     if not is_space(char) then
-      return translate.skip_chars_left(doc, lnext, cnext, is_word(char) and is_word or is_non_word)
+      return translate.skip_chars_left(doc, lnext, cnext, is_word(char) and is_word or is_symbol)
     end
   end
 
@@ -123,12 +128,12 @@ function translate.word_right(doc, line, col)
 
   if cnext > 1 then -- linewise only
     if not is_space(char) then
-      return translate.skip_chars_right(doc, line, col, is_word(char) and is_word or is_non_word)
+      return translate.skip_chars_right(doc, line, col, is_word(char) and is_word or is_symbol)
     end
     -- try again skipping one space
     char = doc:get_char(lnext, cnext)
     if not is_space(char) then
-      return translate.skip_chars_right(doc, lnext, cnext, is_word(char) and is_word or is_non_word)
+      return translate.skip_chars_right(doc, lnext, cnext, is_word(char) and is_word or is_symbol)
     end
   end
 
