@@ -105,7 +105,7 @@ end
 function translate.word_left(doc, line, col)
   local lnext, cnext = doc:position_offset(line, col, -1)
   local char = doc:get_char(lnext, cnext)
-  
+
   if col > 1 then -- linewise only
     if not is_space(char) then
       return translate.skip_chars_left(doc, lnext, cnext, is_word(char) and is_word or is_symbol)
